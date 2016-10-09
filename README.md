@@ -1,35 +1,7 @@
-#Examples of NCE Loss
+#Spatial-Embedding for Social Recommendation
 
-nce-loss is used to speedup multi-class classification when class num is huge.
+To make use of the location information when recommending social events.
 
-## Toy example
+## Tools:
+1. mxnet: a deep-learning framework realized in C++, and support python package.
 
-* toy_softmax.py: a multi class example using softmax output
-* toy_nce.py: a multi-class example using nce loss
-
-## Word2Vec
-
-* word2vec.py: a CBOW word2vec example using nce loss
-
-You can run it by
-
-```
-./get_text8.sh
-python word2vec.py
-
-```
-
-## LSTM
-
-* lstm_word.py: a lstm example use nce loss
-
-You can run it by
-
-```
-./get_text8.sh
-python lstm_word.py
-```
-
-## References
-
-You can refer to [http://www.jianshu.com/p/e439b43ea464](http://www.jianshu.com/p/e439b43ea464) for more details. (In Chinese)
