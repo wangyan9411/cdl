@@ -126,6 +126,7 @@ class Solver(object):
         lambda_v_rt_old[:] = lambda_v_rt[:]
         lambda_v_rt[:,:] = 0
         epoch = 0 # index epochs
+        # V changed during back propagation.
         data_iter = mx.io.NDArrayIter({'data': X, 'V': V, 'lambda_v_rt':
             lambda_v_rt},
             batch_size=batch_size, shuffle=False,
@@ -139,24 +140,15 @@ class Solver(object):
             if self.iter_start_callback is not None:
                 if self.iter_start_callback(i):
                     return
-            #if i==100:
-            #    V = np.zeros(V.shape)
-            #    data_iter = mx.io.NDArrayIter({'data': X, 'V': V, 'lambda_v_rt':
-            #        lambda_v_rt},
-            #        batch_size=batch_size, shuffle=False,
-            #        last_batch_handle='pad')
-            #    data_iter.reset()
-            #    for j in range(10):
-            #        batch = data_iter.next()
             try:
                 batch = data_iter.next()
             except:
-                # means the end of an epoch
+                # means the end of an epoch, change the U, V
                 epoch += 1
-                theta = model.extract_feature(sym[0], args, auxs,
+                theta1 = model.extract_feature(sym[0], args, auxs,
                     data_iter, X.shape[0], xpu).values()[0]
                 # update U, V and get BCD loss
-                U, V, BCD_loss = BCD_one(R, U, V, theta,
+                U, V, BCD_loss = BCD_one(R, U, V, theta1,
                     lambda_u, lambda_v, dir_save, True)
                 # get recon' loss
                 Y = model.extract_feature(sym[1], args, auxs,
@@ -169,6 +161,11 @@ class Solver(object):
                     BCD_loss+Recon_loss, BCD_loss, Recon_loss))
                 fp.close()
                 lambda_v_rt[:] = lambda_v_rt_old[:] # back to normal lambda_v_rt
+
+                # perform one epoch of the location embedding.
+                LocationEmbedding.perform_one_epoch(theta1, V)
+                theta2 = LocationEmbedding.get_params()
+
                 data_iter = mx.io.NDArrayIter({'data': X, 'V': V, 'lambda_v_rt':
                     lambda_v_rt},
                     batch_size=batch_size, shuffle=False,
@@ -205,8 +202,6 @@ class Solver(object):
                     return
             exe.outputs[0].wait_to_read()
 
-            # perform one batch of the location embedding.
-            solver
 
         #Y = model.extract_feature(sym[0], args, auxs,
         #        data_iter, X.shape[0], xpu).values()[0]

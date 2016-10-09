@@ -120,7 +120,7 @@ class DataIter(mx.io.DataIter):
         pass
 
 
-class Solver(object):
+class LocationEmbedding(object):
     def __init__(self, optimizer, **kwargs):
         if isinstance(optimizer, str):
             self.optimizer = mx.optimizer.create(optimizer, **kwargs)
@@ -145,43 +145,69 @@ class Solver(object):
     def set_iter_start_callback(self, callback):
         self.iter_start_callback = callback
 
-    def solve(self, xpu, sym,
+    def perform_one_epoch(self, data_iter):
+        for batch in data_iter:
+            # print batch.data[0].asnumpy()
+            # input_buffs to load the batch_data. input_buff is bind to the executor.
+            for data, buff in zip(batch.data+batch.label, self.input_buffs):
+                data.copyto(buff)
+                # invoke the forward
+            self.exe.forward(is_train=True)
+            # monitor, not used here
+            #if self.monitor is not None:
+                #self.monitor.forward_end(i, internal_dict)
+                    #for key in output_dict:
+                # output_buff is used for computing metrics
+                #output_dict[key].copyto(output_buff[key])
+
+            # compute the gradients for arguments and update
+            self.exe.backward()
+            for key, arr in self.update_dict.items():
+                # print str(arr.asnumpy())
+                self.updater(key, arr, self.args[key])
+
+            # exe.outputs is a list
+            self.exe.outputs[0].wait_to_read()
+
+
+    def construct(self, xpu, sym,
             data_iter, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
         self.xpu = xpu
         # 50 is consistent with K in Joint learning
-        args = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
-        args_grad = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
+        self.args = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
+        self.args_grad = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
         # initialize the params
         init = mx.init.Xavier(factor_type="in", magnitude=2.34)
-        for k,v in args.items():
+        for k,v in self.args.items():
             init(k,v)
 
         print 'original'
-        print str(args['embed_weight'].asnumpy())
+        print str(self.args['embed_weight'].asnumpy())
 
 
         input_desc = data_iter.provide_data + data_iter.provide_label
         input_names = [k for k, shape in input_desc]
-        input_buffs = [mx.nd.empty(shape, ctx=xpu) for k, shape in input_desc]
+        self.input_buffs = [mx.nd.empty(shape, ctx=xpu) for k, shape in input_desc]
         # add to the arguments of the sym. merge two dictionary.
-        args = dict(args, **dict(zip(input_names, input_buffs)))
+        self.args = dict(self.args, **dict(zip(input_names, self.input_buffs)))
 
         output_names = sym.list_outputs()
-        exe = sym.bind(xpu, args=args, args_grad=args_grad, aux_states=auxs)
+        self.exe = sym.bind(xpu, args=self.args, args_grad=self.args_grad, aux_states=auxs)
 
-        assert len(sym.list_arguments()) == len(exe.grad_arrays)
+        assert len(sym.list_arguments()) == len(self.exe.grad_arrays)
 
         # update arguments except the data
-        update_dict = {name: nd for name, nd in zip(sym.list_arguments(), exe.grad_arrays) if nd}
-        batch_size = input_buffs[0].shape[0]
+        self.update_dict = {name: nd for name, nd in zip(sym.list_arguments(), self.exe.grad_arrays) if nd}
+        batch_size = self.input_buffs[0].shape[0]
         # set the scale.
         self.optimizer.rescale_grad = 1.0/batch_size
         self.optimizer.set_lr_mult(args_lrmult)
 
+# output diff used for the metric, not used so far
         output_dict = {}
         output_buff = {}
-        internal_dict = dict(zip(input_names, input_buffs))
-        for key, arr in zip(sym.list_outputs(), exe.outputs):
+        internal_dict = dict(zip(input_names, self.input_buffs))
+        for key, arr in zip(sym.list_outputs(), self.exe.outputs):
             if key in output_names:
                 output_dict[key] = arr
                 output_buff[key] = mx.nd.empty(arr.shape, ctx=mx.cpu())
@@ -189,60 +215,38 @@ class Solver(object):
                 internal_dict[key] = arr
 
         data_iter.reset()
-        #for i in range(begin_iter, end_iter):
-        for i in range(0, 40):
-            for batch in data_iter:
-                # print batch.data[0].asnumpy()
-                # input_buffs to load the batch_data. input_buff is bind to the executor.
-                for data, buff in zip(batch.data+batch.label, input_buffs):
-                    data.copyto(buff)
-                        # invoke the forward
-                exe.forward(is_train=True)
-                if self.monitor is not None:
-                    self.monitor.forward_end(i, internal_dict)
-                for key in output_dict:
-                    # output_buff is used for computing metrics
-                    output_dict[key].copyto(output_buff[key])
 
-                # compute the gradients for arguments and update
-                exe.backward()
-                for key, arr in update_dict.items():
-                    # print str(arr.asnumpy())
-                    self.updater(key, arr, args[key])
+    def get_params(self):
+        return self.args
 
-                # exe.outputs is a list
-                exe.outputs[0].wait_to_read()
-            data_iter.reset()
-                #print str(args['embed_weight'].asnumpy())
 
-        return args
-
-if __name__ == '__main__':
-    parser = OptionParser()
-    parser.add_option("-g", "--gpu", action = "store_true", dest = "gpu", default = False,
-                      help = "use gpu")
-    batch_size = 256
+def getLocationEmbedding():
     num_label = 5
+    batch_size = 256
     data_iter = DataIter("./data/text8", batch_size, num_label)
-
     network = get_net(data_iter.vocab_size, num_label - 1, num_label)
-    
-    options, args = parser.parse_args()
-    devs = mx.cpu()
-    if options.gpu == True:
-        devs = mx.gpu()
-
-
     metric = NceAuc()
-    solver = Solver('sgd', momentum=0.9, wd=0.0000, learning_rate=0.3, lr_scheduler
-                    = None#mx.misc.FactorScheduler(20000,0.1)
+    solver = LocationEmbedding('sgd', momentum=0.9, wd=0.0000, learning_rate=0.3, lr_scheduler
+                    = None #mx.misc.FactorScheduler(20000,0.1)
                     )
     solver.set_metric(metric)
 # solver.set_monitor(Monitor(1000))
 
 #   logging.info('Fine tuning...')
-    args = solver.solve(xpu = mx.cpu(), sym = network, data_iter = data_iter)
+    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter)
+    return solver, data_iter
+
+if __name__ == '__main__':
+    LE, data_iter = getLocationEmbedding()
+    #for i in range(begin_iter, end_iter):
+    epoch = 20
+    for i in range(0, epoch):
+        LE.perform_one_epoch(data_iter)
+        data_iter.reset()
+#print str(args['embed_weight'].asnumpy())
+
 
 # a = model.get_params()
+    args = LE.get_params()
     open('save2', 'w').write(str(args['embed_weight'].asnumpy()))
 
