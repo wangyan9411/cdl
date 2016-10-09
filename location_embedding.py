@@ -7,6 +7,8 @@ from collections import namedtuple
 from nce import *
 from operator import itemgetter
 from optparse import OptionParser
+from numpy import linalg as la
+
 
 np.set_printoptions(threshold=np.nan)
 
@@ -31,14 +33,21 @@ def get_net(vocab_size, num_input, num_label):
                     embed_weight = embed_weight,
                     vocab_size = vocab_size,
                     num_hidden = 50,
-                    num_label = num_label)    
+                    num_label = num_label)
 
+# return data: dict(zip(itemID, itemdata)) Or a list indexed by itemID, loaction: dict(zip(itemID, locationID)),
+# negative: sampling according to frequency.
+# fre[wordID] = freq
+# name1: raw text concated, name2: item text per line
 def load_data(name):
-    buf = open(name).read()
-    tks = buf.split(' ')
+    # sum
+    fin = open(name, 'r')
+    tks = []
+    for buf in fin.readlines():
+        tks += buf.split(' ')
     vocab = {}
+    # word index start from 1
     freq = [0]
-    data = []
     for tk in tks:
         if len(tk) == 0:
             continue
@@ -46,7 +55,7 @@ def load_data(name):
             vocab[tk] = len(vocab) + 1
             freq.append(0)
         wid = vocab[tk]
-        data.append(wid)
+        #data.append(wid)
         freq[wid] += 1
     negative = []
     for i, v in enumerate(freq):
@@ -54,70 +63,73 @@ def load_data(name):
             continue
         v = int(math.pow(v * 1.0, 0.75))
         negative += [i for _ in range(v)]
-    return data, negative, vocab, freq
 
-class SimpleBatch(object):
-    def __init__(self, data_names, data, label_names, label):
-        self.data = data
-        self.label = label
-        self.data_names = data_names
-        self.label_names = label_names
+    print 'vocabularies size'
+    print len(vocab)
+    # construct data
+    data = []
+    fin = open(name, 'r')
+    item_size = 0
+    for id, line in enumerate(fin.readlines()):
+        tks = line.split(' ')
+        data.append([vocab[tk] for tk in tks])
+        item_size += 1
+    #assign faked word id to locations
+    location = range(len(vocab)+1, len(vocab)+1+item_size)
 
-    @property
-    def provide_data(self):
-        return [(n, x.shape) for n, x in zip(self.data_names, self.data)]
+    return data, location, negative, vocab, freq
 
-    @property
-    def provide_label(self):
-        return [(n, x.shape) for n, x in zip(self.label_names, self.label)]
-
-
-class DataIter(mx.io.DataIter):
-    def __init__(self, name, batch_size, num_label):
-        super(DataIter, self).__init__()
+class DataMatrix():
+    # file(name) store the corpus, each line stands for a item.
+    def __init__(self, name, batch_size, num_label, sample_num = 4):
+        # super(DataIter, self).__init__()
         self.batch_size = batch_size
-        self.data, self.negative, self.vocab, self.freq = load_data(name)
-        self.vocab_size = 1 + len(self.vocab)
-        print 'vocab_size'
+        self.sample_num = sample_num
+        # self.data: a dict storing the key itemID to value the context sequence.
+        # self.negative stores the sampling pool for the NCE
+        self.data, self.location, self.negative, self.vocab, self.freq = load_data(name)
+        # Some mistake here? !! the word 0 and word_last is never updated
+        self.vocab_size = 1 + len(self.vocab) + len(self.data) # plus the location size
+        print 'vocab size'
         print self.vocab_size
         self.num_label = num_label
-        self.provide_data = [('data', (batch_size, num_label - 1))]
+        self.item_size = len(self.data)
+        # Dimension num_label-1 context words and one location,
+        self.provide_data = [('data', (batch_size, num_label))]
+        # predict the label
         self.provide_label = [('label', (self.batch_size, num_label)),
                               ('label_weight', (self.batch_size, num_label))]
-        
+
     def sample_ne(self):
         return self.negative[random.randint(0, len(self.negative) - 1)]
 
-    def __iter__(self):
+    def get_matrix(self):
+        # location[i]: the location id of the item i; imitate a word and is added to the input.
         print 'begin'
         batch_data = []
         batch_label = []
         batch_label_weight = []
-        start = random.randint(0, self.num_label - 1)
-        for i in range(start, len(self.data) - self.num_label - start, self.num_label):
-            context = self.data[i: i + self.num_label / 2] \
-                      + self.data[i + 1 + self.num_label / 2: i + self.num_label]
-            target_word = self.data[i + self.num_label / 2]
-            if self.freq[target_word] < 5:
-                continue
-            target = [target_word] \
-                     + [self.sample_ne() for _ in range(self.num_label - 1)]
-            target_weight = [1.0] + [0.0 for _ in range(self.num_label - 1)]
-            batch_data.append(context)
-            batch_label.append(target)
-            batch_label_weight.append(target_weight)
-            if len(batch_data) == self.batch_size:
-                data_all = [mx.nd.array(batch_data)]
-                label_all = [mx.nd.array(batch_label), mx.nd.array(batch_label_weight)]
-                data_names = ['data']
-                label_names = ['label', 'label_weight']
-                batch_data = []
-                batch_label = []
-                batch_label_weight = []
-                yield SimpleBatch(data_names, data_all, label_names, label_all)
+        for i in range(0, len(self.data)):
+            # for each item, sample subset of 4 to train out the location embedding.
+            for j in range(0, self.sample_num):
+                start = random.randint(0, len(self.data[i]) - self.num_label - 1)
+                context = [self.location[i]] + self.data[i][start: start + self.num_label / 2] \
+                    + self.data[i][start + 1 + self.num_label / 2: start + self.num_label]
+                target_word = self.data[i][start + self.num_label / 2]
+                if self.freq[target_word] < 5:
+                    continue
+                target = [target_word] \
+                    + [self.sample_ne() for _ in range(self.num_label - 1)]
+                target_weight = [1.0] + [0.0 for _ in range(self.num_label - 1)]
+                # print (context)
+                batch_data.append(context)
+                batch_label.append(target)
+                batch_label_weight.append(target_weight)
 
-    def reset(self):
-        pass
+        matrix = np.array(batch_data)
+        matrix_label = np.array(batch_label)
+        matrix_label_weight = np.array(batch_label_weight)
+        return len(self.data), mx.nd.array(matrix), mx.nd.array(matrix_label), mx.nd.array(matrix_label_weight)
 
 
 class LocationEmbedding(object):
@@ -146,6 +158,7 @@ class LocationEmbedding(object):
         self.iter_start_callback = callback
 
     def perform_one_epoch(self, data_iter):
+        print 'perform one epoch'
         for batch in data_iter:
             # print batch.data[0].asnumpy()
             # input_buffs to load the batch_data. input_buff is bind to the executor.
@@ -171,18 +184,20 @@ class LocationEmbedding(object):
 
 
     def construct(self, xpu, sym,
-            data_iter, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
+            data_iter, vocab_size, data_size, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
         self.xpu = xpu
+        self.vocab_size = vocab_size
+        self.data_size = data_size
         # 50 is consistent with K in Joint learning
-        self.args = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
-        self.args_grad = {'embed_weight': mx.nd.empty((data_iter.vocab_size, 50), self.xpu),}
+        self.args = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
+        self.args_grad = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
         # initialize the params
         init = mx.init.Xavier(factor_type="in", magnitude=2.34)
         for k,v in self.args.items():
             init(k,v)
 
-        print 'original'
-        print str(self.args['embed_weight'].asnumpy())
+#print 'original'
+#print str(self.args['embed_weight'].asnumpy())
 
 
         input_desc = data_iter.provide_data + data_iter.provide_label
@@ -217,14 +232,19 @@ class LocationEmbedding(object):
         data_iter.reset()
 
     def get_params(self):
-        return self.args
+        return self.args['embed_weight'].asnumpy()[self.vocab_size - self.data_size:, :]
 
 
 def getLocationEmbedding():
-    num_label = 5
+    num_label = 6
     batch_size = 256
-    data_iter = DataIter("./data/text8", batch_size, num_label)
-    network = get_net(data_iter.vocab_size, num_label - 1, num_label)
+    datamatrix = DataMatrix("./data/text8", batch_size, num_label)
+    data_size, data, label, label_weight = datamatrix.get_matrix()
+    data_iter = mx.io.NDArrayIter({'data': data, 'label': label, 'label_weight': label_weight},
+                                  batch_size=batch_size, shuffle=False, # shuffle should be True?
+                                  last_batch_handle='pad')
+
+    network = get_net(datamatrix.vocab_size, num_label, num_label)
     metric = NceAuc()
     solver = LocationEmbedding('sgd', momentum=0.9, wd=0.0000, learning_rate=0.3, lr_scheduler
                     = None #mx.misc.FactorScheduler(20000,0.1)
@@ -233,7 +253,7 @@ def getLocationEmbedding():
 # solver.set_monitor(Monitor(1000))
 
 #   logging.info('Fine tuning...')
-    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter)
+    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter, vocab_size = datamatrix.vocab_size, data_size = data_size)
     return solver, data_iter
 
 if __name__ == '__main__':
@@ -243,10 +263,19 @@ if __name__ == '__main__':
     for i in range(0, epoch):
         LE.perform_one_epoch(data_iter)
         data_iter.reset()
+
 #print str(args['embed_weight'].asnumpy())
 
 
 # a = model.get_params()
     args = LE.get_params()
-    open('save2', 'w').write(str(args['embed_weight'].asnumpy()))
+    print len(args)
+
+    A = args[0,:]
+    for i in range(0, len(args)):
+        inA = np.mat(A)
+        inB = np.mat(args[i, :])
+        print i
+        print 0.5+0.5*(float(inA*inB.T)/(la.norm(inA)*la.norm(inB)))
+    open('save2', 'w').write(str(args))
 
