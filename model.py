@@ -8,7 +8,7 @@ try:
 except:
    import pickle
 
-
+# get the output // that is the encode or re-construction of data.
 def extract_feature(sym, args, auxs, data_iter, N, xpu=mx.cpu()):
     input_buffs = [mx.nd.empty(shape, ctx=xpu) for k, shape in data_iter.provide_data]
     input_names = [k for k, shape in data_iter.provide_data]

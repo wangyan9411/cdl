@@ -21,9 +21,11 @@ if __name__ == '__main__':
     lambda_v = 10 # lambda_v in CDL
     K = 50
     p = 4
-    is_dummy = False
+    is_dummy = True
+    # 34000
     num_iter = 34000
-    batch_size = 256
+    # 256
+    batch_size = 12
 
     np.random.seed(1234) # set seed
     lv = 1e-2 # lambda_v/lambda_n in CDL
@@ -54,10 +56,12 @@ if __name__ == '__main__':
     #                         lr_scheduler=mx.misc.FactorScheduler(20000,0.1))
     #V = np.zeros((train_X.shape[0],10))
     V = np.random.rand(train_X.shape[0],K)/10
+    print 'item size'
+    print train_X.shape[0]
     lambda_v_rt = np.ones((train_X.shape[0],K))*sqrt(lv)
     U, V, theta, BCD_loss = ae_model.finetune(train_X, R, V, lambda_v_rt, lambda_u,
             lambda_v, dir_save, batch_size,
-            num_iter, 'sgd', l_rate=0.1, decay=0.0,
+            num_iter, 'sgd', l_rate=0.3, decay=0.0,
             lr_scheduler=mx.misc.FactorScheduler(20000,0.1))
     #ae_model.save('cdl_pt.arg')
     np.savetxt(dir_save+'/final-U.dat',U,fmt='%.5f',comments='')

@@ -10,9 +10,149 @@ try:
 except:
    import pickle
 
+def get_net(vocab_size, num_input, num_label):
+    data = mx.sym.Variable('data')
+    label = mx.sym.Variable('label')
+    label_weight = mx.sym.Variable('label_weight')
+    embed_weight = mx.sym.Variable('embed_weight')
+    data_embed = mx.sym.Embedding(data = data, input_dim = vocab_size,
+                                  weight = embed_weight,
+                                  output_dim = 100, name = 'data_embed')
+    datavec = mx.sym.SliceChannel(data = data_embed,
+                                     num_outputs = num_input,
+                                     squeeze_axis = 1, name = 'data_slice')
+    pred = datavec[0]
+    for i in range(1, num_input):
+        pred = pred + datavec[i]
+    return nce_loss(data = pred,
+                    label = label,
+                    label_weight = label_weight,
+                    embed_weight = embed_weight,
+                    vocab_size = vocab_size,
+                    num_hidden = 100,
+                    num_label = num_label)    
+
+# return data: dict(zip(itemID, itemdata)) Or a list indexed by itemID, loaction: dict(zip(itemID, locationID)),
+# negative: sampling according to frequency.
+# fre[wordID] = freq
+# name1: raw text concated, name2: item text per line
+def load_data(name, name2):
+    buf = open(name).read()
+    tks = buf.split(' ')
+    vocab = {}
+    # word index start from 1
+    freq = [0]
+    for tk in tks:
+        if len(tk) == 0:
+            continue
+        if tk not in vocab:
+            vocab[tk] = len(vocab) + 1
+            freq.append(0)
+        wid = vocab[tk]
+        #data.append(wid)
+        freq[wid] += 1
+    negative = []
+    for i, v in enumerate(freq):
+        if i == 0 or v < 5:
+            continue
+        v = int(math.pow(v * 1.0, 0.75))
+        negative += [i for _ in range(v)]
+
+    data = []
+    fin = open(name2, 'r')
+    for id, line in enumerate(fin.readlines()):
+        tks = line.split(' ')
+        data[id] = [vocab[tk] for tk in tks]
+    item_size = fin.readlines.size()
+    #assign faked word id to locations
+    location = range(len(vocab)+1, len(vocab)+1+item_size)
+
+    return data, location, negative, vocab, freq
+
+class DataIter(mx.io.DataIter):
+    # file(name) store the corpus, each line stands for a item.
+    def __init__(self, name, sample_num, batch_size, num_label):
+        super(DataIter, self).__init__()
+        self.batch_size = batch_size
+        self.sample_num = sample_num
+        # self.data: a dict storing the key itemID to value the context sequence.
+        # self.negative stores the sampling pool for the NCE
+        self.data, self.location, self.negative, self.vocab, self.freq = load_data(name)
+        self.vocab_size = 1 + len(self.vocab)
+        print self.vocab_size
+        self.num_label = num_label
+        # Dimension num_label-1 context words and one location,
+        self.provide_data = [('data', (batch_size, num_label))]
+        # predict the label
+        self.provide_label = [('label', (self.batch_size, num_label)),
+                              ('label_weight', (self.batch_size, num_label))]
+        
+    def sample_ne(self):
+        return self.negative[random.randint(0, len(self.negative) - 1)]
+
+    def __iter__(self):
+        # location[i]: the location id of the item i; imitate a word and is added to the input.
+        print 'begin'
+        batch_data = []
+        batch_label = []
+        batch_label_weight = []
+        for i in range(0, item_size):
+            # for each item, sample
+            for j in range(0, self.sample_num):
+                start = random.randint(0, len(self.data[i]) - num_label - 1)
+                context = [self.location[i]] + self.data[i][start: start + self.num_label / 2] \
+                    + self.data[i][start + 1 + self.num_label / 2: start + self.num_label]
+                target_word = self.data[i][start + self.num_label / 2]
+                if self.freq[target_word] < 5:
+                    continue
+                target = [target_word] \
+                         + [self.sample_ne() for _ in range(self.num_label - 1)]
+                target_weight = [1.0] + [0.0 for _ in range(self.num_label - 1)]
+                batch_data.append(context)
+                batch_label.append(target)
+                batch_label_weight.append(target_weight)
+
+
+    def reset(self):
+        pass
+
+'''
+class LocationEmbedding():
+    def __init__(self):
+        self.sample_num = 5
+    batch_size = 256*self.sample_num
+    num_label = 5
+    
+    data_train = DataIter("./data/text8", self.sample_num, batch_size, num_label)
+    
+    network = get_net(data_train.vocab_size, num_label - 1, num_label)
+    
+    options, args = parser.parse_args()
+    devs = mx.cpu()
+    if options.gpu == True:
+        devs = mx.gpu()
+    model = mx.model.FeedForward(ctx = devs,
+                                 symbol = network,
+                                 num_epoch = 20,
+                                 learning_rate = 0.3,
+                                 momentum = 0.9,
+                                 wd = 0.0000,
+                                 initializer=mx.init.Xavier(factor_type="in", magnitude=2.34))
+
+    import logging
+    head = '%(asctime)-15s %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=head)
+    
+    metric = NceAuc()
+    model.fit(X = data_train,
+              eval_metric = metric,
+              batch_end_callback = mx.callback.Speedometer(batch_size, 50),)
+'''
 class AutoEncoderModel(model.MXModel):
     def setup(self, dims, sparseness_penalty=None, pt_dropout=None, ft_dropout=None, input_act=None, internal_act='relu', output_act=None):
         self.N = len(dims) - 1
+        print dims
+        print len(dims)
         self.dims = dims
         self.stacks = []
         self.pt_dropout = pt_dropout
@@ -24,7 +164,9 @@ class AutoEncoderModel(model.MXModel):
         self.data = mx.symbol.Variable('data')
         self.V = mx.symbol.Variable('V')
         self.lambda_v_rt = mx.symbol.Variable('lambda_v_rt')
+        #
         for i in range(self.N):
+            # first layer is
             if i == 0:
                 decoder_act = input_act
                 idropout = None
@@ -44,6 +186,8 @@ class AutoEncoderModel(model.MXModel):
             self.args_grad.update(iargs_grad)
             self.args_mult.update(iargs_mult)
             self.auxs.update(iauxs)
+
+            #construct the stacked auto-encoder.
         self.encoder, self.internals = self.make_encoder(self.data, dims, sparseness_penalty, ft_dropout, internal_act, output_act)
         self.decoder = self.make_decoder(self.encoder, dims, sparseness_penalty, ft_dropout, internal_act, input_act)
         if input_act == 'softmax':
@@ -51,10 +195,11 @@ class AutoEncoderModel(model.MXModel):
         else:
             #fe_loss = mx.symbol.LinearRegressionOutput(data=1*self.encoder,
             #    label=1*self.V)
-            fe_loss = mx.symbol.LinearRegressionOutput(data=self.lambda_v_rt*self.encoder,
+            self.fe_loss = mx.symbol.LinearRegressionOutput(data=self.lambda_v_rt*self.encoder,
                 label=self.lambda_v_rt*self.V)
-            fr_loss = mx.symbol.LinearRegressionOutput(data=self.decoder, label=self.data)
-            self.loss = mx.symbol.Group([fe_loss, fr_loss])
+            self.fr_loss = mx.symbol.LinearRegressionOutput(data=self.decoder, label=self.data)
+            # final NN
+            self.loss = mx.symbol.Group([self.fe_loss, self.fr_loss])
 
     def make_stack(self, istack, data, num_input, num_hidden, sparseness_penalty=None, idropout=None,
                    odropout=None, encoder_act='relu', decoder_act='relu'):
@@ -171,7 +316,7 @@ class AutoEncoderModel(model.MXModel):
         logging.info('Fine tuning...')
         # self.loss is the net
         U, V, theta, BCD_loss = solver.solve(X, R, V, lambda_v_rt, lambda_u,
-            lambda_v, dir_save, batch_size, self.xpu, self.loss, self.args, self.args_grad, self.auxs, data_iter,
+            lambda_v, dir_save, batch_size, self.xpu, self.fe_loss, self.fr_loss, self.args, self.args_grad, self.auxs, data_iter,
             0, n_iter, {}, False)
         return U, V, theta, BCD_loss
 
