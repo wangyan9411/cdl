@@ -10,61 +10,6 @@ try:
 except:
    import pickle
 
-def get_net(vocab_size, num_input, num_label):
-    data = mx.sym.Variable('data')
-    label = mx.sym.Variable('label')
-    label_weight = mx.sym.Variable('label_weight')
-    embed_weight = mx.sym.Variable('embed_weight')
-    data_embed = mx.sym.Embedding(data = data, input_dim = vocab_size,
-                                  weight = embed_weight,
-                                  output_dim = 100, name = 'data_embed')
-    datavec = mx.sym.SliceChannel(data = data_embed,
-                                     num_outputs = num_input,
-                                     squeeze_axis = 1, name = 'data_slice')
-    pred = datavec[0]
-    for i in range(1, num_input):
-        pred = pred + datavec[i]
-    return nce_loss(data = pred,
-                    label = label,
-                    label_weight = label_weight,
-                    embed_weight = embed_weight,
-                    vocab_size = vocab_size,
-                    num_hidden = 100,
-                    num_label = num_label)    
-
-
-'''
-class LocationEmbedding():
-    def __init__(self):
-        self.sample_num = 5
-    batch_size = 256*self.sample_num
-    num_label = 5
-    
-    data_train = DataIter("./data/text8", self.sample_num, batch_size, num_label)
-    
-    network = get_net(data_train.vocab_size, num_label - 1, num_label)
-    
-    options, args = parser.parse_args()
-    devs = mx.cpu()
-    if options.gpu == True:
-        devs = mx.gpu()
-    model = mx.model.FeedForward(ctx = devs,
-                                 symbol = network,
-                                 num_epoch = 20,
-                                 learning_rate = 0.3,
-                                 momentum = 0.9,
-                                 wd = 0.0000,
-                                 initializer=mx.init.Xavier(factor_type="in", magnitude=2.34))
-
-    import logging
-    head = '%(asctime)-15s %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=head)
-    
-    metric = NceAuc()
-    model.fit(X = data_train,
-              eval_metric = metric,
-              batch_end_callback = mx.callback.Speedometer(batch_size, 50),)
-'''
 class AutoEncoderModel(model.MXModel):
     def setup(self, dims, sparseness_penalty=None, pt_dropout=None, ft_dropout=None, input_act=None, internal_act='relu', output_act=None):
         self.N = len(dims) - 1

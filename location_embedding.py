@@ -15,6 +15,7 @@ np.set_printoptions(threshold=np.nan)
 def get_net(vocab_size, num_input, num_label):
     data = mx.sym.Variable('data')
     label = mx.sym.Variable('label')
+    label_V = mx.sym.Variable('label_V')
     label_weight = mx.sym.Variable('label_weight')
     embed_weight = mx.sym.Variable('embed_weight')
     # input_dim don't mean the input data.shape[1]
@@ -27,13 +28,18 @@ def get_net(vocab_size, num_input, num_label):
     pred = datavec[0]
     for i in range(1, num_input):
         pred = pred + datavec[i]
-    return nce_loss(data = pred,
+    # datavec[0] is the learned embedding of the location
+    f1_loss = mx.symbol.LinearRegressionOutput(data=datavec[0],
+                                               label=label_V)
+    f2_loss = nce_loss(data = pred,
                     label = label,
                     label_weight = label_weight,
                     embed_weight = embed_weight,
                     vocab_size = vocab_size,
                     num_hidden = 50,
                     num_label = num_label)
+    return mx.symbol.Group([f1_loss, f2_loss])
+
 
 # return data: dict(zip(itemID, itemdata)) Or a list indexed by itemID, loaction: dict(zip(itemID, locationID)),
 # negative: sampling according to frequency.
@@ -103,7 +109,7 @@ class DataMatrix():
     def sample_ne(self):
         return self.negative[random.randint(0, len(self.negative) - 1)]
 
-    def get_matrix(self):
+    def get_matrix(self, V_theta1):
         # location[i]: the location id of the item i; imitate a word and is added to the input.
         print 'begin'
         batch_data = []
@@ -126,10 +132,17 @@ class DataMatrix():
                 batch_label.append(target)
                 batch_label_weight.append(target_weight)
 
+        # construct label_V-theta1:
+        assert len(self.data) == len(V_theta1)
+        batch_label_V = [l for l in V_theta1 for _ in range(0, self.sample_num)]
+        assert len(batch_label_V) == len(batch_data)
+
         matrix = np.array(batch_data)
         matrix_label = np.array(batch_label)
         matrix_label_weight = np.array(batch_label_weight)
-        return len(self.data), mx.nd.array(matrix), mx.nd.array(matrix_label), mx.nd.array(matrix_label_weight)
+        matrix_label_V = np.array(batch_label_V)
+        return len(self.data), mx.nd.array(matrix), mx.nd.array(matrix_label), \
+                mx.nd.array(matrix_label_weight), mx.nd.array(matrix_label_V)
 
 
 class LocationEmbedding(object):
@@ -239,8 +252,11 @@ def getLocationEmbedding():
     num_label = 6
     batch_size = 256
     datamatrix = DataMatrix("./data/text8", batch_size, num_label)
-    data_size, data, label, label_weight = datamatrix.get_matrix()
-    data_iter = mx.io.NDArrayIter({'data': data, 'label': label, 'label_weight': label_weight},
+    # (TODO: wangyan) the initialization is very important
+    V_theta1 = np.random.random([104,50])
+    print str(V_theta1)
+    data_size, data, label, label_weight, label_V = datamatrix.get_matrix(V_theta1)
+    data_iter = mx.io.NDArrayIter({'data': data, 'label': label, 'label_weight': label_weight, 'label_V': label_V},
                                   batch_size=batch_size, shuffle=False, # shuffle should be True?
                                   last_batch_handle='pad')
 

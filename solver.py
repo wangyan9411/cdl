@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import model
 from BCD_one import BCD_one
+from location_embedding import *
 
 
 
@@ -61,6 +62,9 @@ class Solver(object):
     def solve(self, X, R, V, lambda_v_rt, lambda_u, lambda_v, dir_save, batch_size, xpu, sym1, sym2, args, args_grad, auxs,
               data_iter, begin_iter, end_iter, args_lrmult={}, debug = False):
         sym = mx.symbol.Group([sym1, sym2])
+
+        LE, data_iter_le = getLocationEmbedding()
+
         # names and shapes
         print 'name and shapes'
         input_desc = data_iter.provide_data + data_iter.provide_label
@@ -163,8 +167,10 @@ class Solver(object):
                 lambda_v_rt[:] = lambda_v_rt_old[:] # back to normal lambda_v_rt
 
                 # perform one epoch of the location embedding.
-                LocationEmbedding.perform_one_epoch(theta1, V)
-                theta2 = LocationEmbedding.get_params()
+                LE.perform_one_epoch(data_iter_le)
+                data_iter_le.reset()
+                theta2 = LE.get_params()
+                print len(theta2)
 
                 data_iter = mx.io.NDArrayIter({'data': X, 'V': V, 'lambda_v_rt':
                     lambda_v_rt},
