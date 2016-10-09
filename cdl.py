@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # 34000
     num_iter = 1000
     # 256
-    batch_size = 256
+    batch_size = 10
 
     np.random.seed(1234) # set seed
     lv = 1e-2 # lambda_v/lambda_n in CDL

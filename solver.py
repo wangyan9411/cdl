@@ -63,7 +63,7 @@ class Solver(object):
               data_iter, begin_iter, end_iter, args_lrmult={}, debug = False):
         sym = mx.symbol.Group([sym1, sym2])
 
-        LE, data_iter_le = getLocationEmbedding()
+        LE, data_iter_le = getLocationEmbedding(batch_size*4, len(V))
 
         # names and shapes
         print 'name and shapes'
@@ -151,8 +151,22 @@ class Solver(object):
                 epoch += 1
                 theta1 = model.extract_feature(sym[0], args, auxs,
                     data_iter, X.shape[0], xpu).values()[0]
+                
+                # perform one epoch of the location embedding.
+                assert len(V) == len(theta1)
+                V_theta1 = V - theta1
+                data_size, data_le, label_le, label_weight_le, label_V = LE.datamatrix.get_matrix(V_theta1)
+                data_iter_le = mx.io.NDArrayIter({'data': data_le, 'label': label_le, 'label_weight': label_weight_le, 'label_V': label_V},
+                                                 batch_size=batch_size*4, # 4 is the sample num in location embedding, not necessary to be consistent
+                                                 shuffle=False, last_batch_handle='pad')
+                data_iter_le.reset()
+                LE.perform_one_epoch(data_iter_le)
+                data_iter_le.reset()
+                theta2 = LE.get_params()
+
+
                 # update U, V and get BCD loss
-                U, V, BCD_loss = BCD_one(R, U, V, theta1,
+                U, V, BCD_loss = BCD_one(R, U, V, theta1+theta2,
                     lambda_u, lambda_v, dir_save, True)
                 # get recon' loss
                 Y = model.extract_feature(sym[1], args, auxs,
@@ -166,16 +180,12 @@ class Solver(object):
                 fp.close()
                 lambda_v_rt[:] = lambda_v_rt_old[:] # back to normal lambda_v_rt
 
-                # perform one epoch of the location embedding.
-                LE.perform_one_epoch(data_iter_le)
-                data_iter_le.reset()
-                theta2 = LE.get_params()
-                print len(theta2)
-
-                data_iter = mx.io.NDArrayIter({'data': X, 'V': V, 'lambda_v_rt':
+                # reset the data iterator for the SDAE.
+                data_iter = mx.io.NDArrayIter({'data': X, 'V': V-theta2, 'lambda_v_rt':
                     lambda_v_rt},
                     batch_size=batch_size, shuffle=False,
                     last_batch_handle='pad')
+
                 data_iter.reset()
                 batch = data_iter.next()
             # U and V set, update W and B

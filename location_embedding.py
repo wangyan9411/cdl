@@ -173,20 +173,10 @@ class LocationEmbedding(object):
     def perform_one_epoch(self, data_iter):
         print 'perform one epoch'
         for batch in data_iter:
-            # print batch.data[0].asnumpy()
             # input_buffs to load the batch_data. input_buff is bind to the executor.
             for data, buff in zip(batch.data+batch.label, self.input_buffs):
                 data.copyto(buff)
-                # invoke the forward
             self.exe.forward(is_train=True)
-            # monitor, not used here
-            #if self.monitor is not None:
-                #self.monitor.forward_end(i, internal_dict)
-                    #for key in output_dict:
-                # output_buff is used for computing metrics
-                #output_dict[key].copyto(output_buff[key])
-
-            # compute the gradients for arguments and update
             self.exe.backward()
             for key, arr in self.update_dict.items():
                 # print str(arr.asnumpy())
@@ -197,10 +187,11 @@ class LocationEmbedding(object):
 
 
     def construct(self, xpu, sym,
-            data_iter, vocab_size, data_size, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
+            data_iter, vocab_size, data_size, data_matrix, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
         self.xpu = xpu
         self.vocab_size = vocab_size
         self.data_size = data_size
+        self.datamatrix = data_matrix
         # 50 is consistent with K in Joint learning
         self.args = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
         self.args_grad = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
@@ -248,12 +239,11 @@ class LocationEmbedding(object):
         return self.args['embed_weight'].asnumpy()[self.vocab_size - self.data_size:, :]
 
 
-def getLocationEmbedding():
+def getLocationEmbedding(batch_size, item_size):
     num_label = 6
-    batch_size = 256
     datamatrix = DataMatrix("./data/text8", batch_size, num_label)
     # (TODO: wangyan) the initialization is very important
-    V_theta1 = np.random.random([104,50])
+    V_theta1 = np.random.random([item_size,50])
     print str(V_theta1)
     data_size, data, label, label_weight, label_V = datamatrix.get_matrix(V_theta1)
     data_iter = mx.io.NDArrayIter({'data': data, 'label': label, 'label_weight': label_weight, 'label_V': label_V},
@@ -269,7 +259,7 @@ def getLocationEmbedding():
 # solver.set_monitor(Monitor(1000))
 
 #   logging.info('Fine tuning...')
-    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter, vocab_size = datamatrix.vocab_size, data_size = data_size)
+    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter, vocab_size = datamatrix.vocab_size, data_size = data_size, data_matrix = datamatrix)
     return solver, data_iter
 
 if __name__ == '__main__':
