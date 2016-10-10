@@ -1,0 +1,119 @@
+{
+  "nodes": [
+    {
+      "op": "null", 
+      "param": {}, 
+      "name": "data", 
+      "inputs": [], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "null", 
+      "param": {}, 
+      "name": "embed_weight", 
+      "inputs": [], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "Embedding", 
+      "param": {
+        "input_dim": "135", 
+        "output_dim": "100"
+      }, 
+      "name": "data_embed", 
+      "inputs": [[0, 0], [1, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "SliceChannel", 
+      "param": {
+        "axis": "1", 
+        "num_outputs": "4", 
+        "squeeze_axis": "True"
+      }, 
+      "name": "data_slice", 
+      "inputs": [[2, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "_Plus", 
+      "param": {}, 
+      "name": "_plus0", 
+      "inputs": [[3, 0], [3, 1]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "_Plus", 
+      "param": {}, 
+      "name": "_plus1", 
+      "inputs": [[4, 0], [3, 2]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "_Plus", 
+      "param": {}, 
+      "name": "_plus2", 
+      "inputs": [[5, 0], [3, 3]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "Reshape", 
+      "param": {
+        "keep_highest": "False", 
+        "reverse": "False", 
+        "shape": "(-1,1,100)", 
+        "target_shape": "(0,0)"
+      }, 
+      "name": "reshape0", 
+      "inputs": [[6, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "null", 
+      "param": {}, 
+      "name": "label", 
+      "inputs": [], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "Embedding", 
+      "param": {
+        "input_dim": "135", 
+        "output_dim": "100"
+      }, 
+      "name": "label_embed", 
+      "inputs": [[8, 0], [1, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "broadcast_mul", 
+      "param": {}, 
+      "name": "broadcast_mul0", 
+      "inputs": [[7, 0], [9, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "sum", 
+      "param": {"axis": "2"}, 
+      "name": "sum0", 
+      "inputs": [[10, 0]], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "null", 
+      "param": {}, 
+      "name": "label_weight", 
+      "inputs": [], 
+      "backward_source_id": -1
+    }, 
+    {
+      "op": "LogisticRegressionOutput", 
+      "param": {"grad_scale": "1"}, 
+      "name": "logisticregressionoutput0", 
+      "inputs": [[11, 0], [12, 0]], 
+      "backward_source_id": -1
+    }
+  ], 
+  "arg_nodes": [0, 1, 8, 12], 
+  "heads": [[13, 0]]
+}

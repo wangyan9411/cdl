@@ -13,6 +13,8 @@ except:
 class AutoEncoderModel(model.MXModel):
     def setup(self, dims, sparseness_penalty=None, pt_dropout=None, ft_dropout=None, input_act=None, internal_act='relu', output_act=None):
         self.N = len(dims) - 1
+        print dims
+        print len(dims)
         self.dims = dims
         self.stacks = []
         self.pt_dropout = pt_dropout
@@ -24,7 +26,9 @@ class AutoEncoderModel(model.MXModel):
         self.data = mx.symbol.Variable('data')
         self.V = mx.symbol.Variable('V')
         self.lambda_v_rt = mx.symbol.Variable('lambda_v_rt')
+        #
         for i in range(self.N):
+            # first layer is
             if i == 0:
                 decoder_act = input_act
                 idropout = None
@@ -44,6 +48,8 @@ class AutoEncoderModel(model.MXModel):
             self.args_grad.update(iargs_grad)
             self.args_mult.update(iargs_mult)
             self.auxs.update(iauxs)
+
+            #construct the stacked auto-encoder.
         self.encoder, self.internals = self.make_encoder(self.data, dims, sparseness_penalty, ft_dropout, internal_act, output_act)
         self.decoder = self.make_decoder(self.encoder, dims, sparseness_penalty, ft_dropout, internal_act, input_act)
         if input_act == 'softmax':
@@ -51,10 +57,11 @@ class AutoEncoderModel(model.MXModel):
         else:
             #fe_loss = mx.symbol.LinearRegressionOutput(data=1*self.encoder,
             #    label=1*self.V)
-            fe_loss = mx.symbol.LinearRegressionOutput(data=self.lambda_v_rt*self.encoder,
+            self.fe_loss = mx.symbol.LinearRegressionOutput(data=self.lambda_v_rt*self.encoder,
                 label=self.lambda_v_rt*self.V)
-            fr_loss = mx.symbol.LinearRegressionOutput(data=self.decoder, label=self.data)
-            self.loss = mx.symbol.Group([fe_loss, fr_loss])
+            self.fr_loss = mx.symbol.LinearRegressionOutput(data=self.decoder, label=self.data)
+            # final NN
+            self.loss = mx.symbol.Group([self.fe_loss, self.fr_loss])
 
     def make_stack(self, istack, data, num_input, num_hidden, sparseness_penalty=None, idropout=None,
                    odropout=None, encoder_act='relu', decoder_act='relu'):
@@ -171,7 +178,7 @@ class AutoEncoderModel(model.MXModel):
         logging.info('Fine tuning...')
         # self.loss is the net
         U, V, theta, BCD_loss = solver.solve(X, R, V, lambda_v_rt, lambda_u,
-            lambda_v, dir_save, batch_size, self.xpu, self.loss, self.args, self.args_grad, self.auxs, data_iter,
+            lambda_v, dir_save, batch_size, self.xpu, self.fe_loss, self.fr_loss, self.args, self.args_grad, self.auxs, data_iter,
             0, n_iter, {}, False)
         return U, V, theta, BCD_loss
 
