@@ -1,5 +1,6 @@
 try:
   import httplib
+  import requests
 except:
         import http.client as httplib
 try:
@@ -14,7 +15,9 @@ except:
 
 #create and return instance that connect to facebook graph
 def create():
-	return  httplib.HTTPSConnection('graph.facebook.com')
+    con = httplib.HTTPSConnection('graph.facebook.com')
+    con.set_tunnel('127.0.0.1', '1080')
+    return con
 
 
 #Sends request to facebook graph
@@ -24,8 +27,12 @@ def send_request(req_cat, con, req_str, kwargs):
                 kwargs= parse.urlencode(kwargs)    #python3x
         except:
                 kwargs= urllib.urlencode(kwargs)   #python2x
-        con.request(req_cat, req_str, kwargs)      #send request to facebook graph
-        res=con.getresponse().read()		   #read response
+        proxies ={'http':'http://127.0.0.1:1080','https':'http://127.0.0.1:1080'}
+        host = 'https://graph.facebook.com'
+        req_str = host +req_str
+        # con.request(req_cat, req_str, kwargs)      #send request to facebook graph
+        html = requests.get(req_str, proxies=proxies)
+        res = html.content	   #read response
         t=type(res)
         if type(res) == t:
                 res=bytes.decode(res)

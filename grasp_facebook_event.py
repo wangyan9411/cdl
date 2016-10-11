@@ -1,6 +1,7 @@
 #-*- coding:utf-8 -*-
 import fb
 import json
+import random
 import numpy as np
 from sklearn.cluster import KMeans
 
@@ -58,7 +59,8 @@ class FbEvent:
 
         return
 
-    def file_transform(self, event_file='event.json', user_file='user.json', event_user_file='event_user.json'):
+    def file_transform(self, event_file='event.json', user_file='user.json', event_user_file='event_user.json',
+                       is_process=0, K=12):
         """read files and transform data into rating matrix and clustering location with kmeans method"""
         with open(event_file, 'r') as f:
             self.all_events = json.load(f)
@@ -89,10 +91,11 @@ class FbEvent:
         all_event_location = [[a[1]['location']['longitude'], a[1]['location']['latitude']]
                               for a in sorted(self.all_events.items(), key=lambda c:c[0])]
         feature = np.mat(all_event_location)
-        clf = KMeans(n_clusters=8)
+        clf = KMeans(n_clusters=K)
         s = clf.fit(feature)
 
-        # self.skip_sparse_item(R, event_id_map, user_id_map, event_file, user_file, event_user_file)
+        if is_process == 1:
+            self.skip_sparse_item(R, event_id_map, user_id_map, event_file, user_file, event_user_file)
         return R, clf.labels_
 
     def skip_sparse_item(self, R, event_id_map, user_id_map, event_file, user_file, event_user_file):
@@ -114,6 +117,31 @@ class FbEvent:
                 del self.all_events[event_id]
         self.write_into_file(event_file, user_file, event_user_file)
 
+    def process_data(self, R, train_file, test_file, event_file_pro):
+        R = R.T
+        m = R.shape[0]
+        data = [[]] * m
+        train = [[]] * m
+        test = [[]] * m
+        for i in range(m):
+            temp = np.where(R[i, :] > 0)[1].A1.tolist()
+            data[i].append(temp)
+            k = int(len(temp) * 0.2)
+            ls = set()
+            if k < 1: k = 1
+            while len(ls) < k:
+                ri = random.randint(0, len(temp) -1)
+                ls.add(ri)
+            test[i] = [temp[j] for j in ls]
+            train[i] = [temp[j] for j in range(len(temp)) if j not in ls]
+        f_train = open(train_file, 'w')
+        f_test = open(test_file, 'w')
+        for i in range(len(train)):
+            f_train.write(str(len(train[i])) + ' ' + ' '.join(str(s) for s in train[i]) + '\n')
+            f_test.write(str(len(test[i])) + ' ' + ' '.join(str(s) for s in test[i]) + '\n')
+        f_train.close()
+        f_test.close()
+
 
 def test_facebook_api(token):
     facebook = fb.graph.api(token)
@@ -131,19 +159,30 @@ def test_fb_event(token):
     """test FbEvent class"""
     user_threshold = 1000
     event_threshold = 1000
-    query_list = ['USC', 'UCLA', 'Stanford', 'MIT',
-                  'Harvard', 'UCB', 'Princeton', 'Cambridge']
+    query_list = ['Beijing', 'Shanghai', 'Washington', 'New York', 'London', 'Cambridge',
+                  'USC', 'Stanford', 'MIT', 'UCB', 'Harvard', 'Princeton'
+                  'Google', 'Microsoft', 'IBM', 'Walmart', 'Disney', 'Coca-Cola'
+                  ]
+    K = len(query_list)
     event_file = 'event.json'
     user_file = 'user.json'
     event_user_file = 'event_user.json'
+    train_file = 'fb_train.dat'
+    test_file = 'fb_test.dat'
+    event_file_pro = 'fb_event.txt'
+    task_is_grasp = 0
     fb = FbEvent(token, user_threshold, event_threshold)
-    # fb.grasp_user_event_info(query_list)
-    # fb.write_into_file(event_file, user_file, event_user_file)
-    R, label = fb.file_transform(event_file, user_file, event_user_file)
+    if task_is_grasp == 1:
+        fb.grasp_user_event_info(query_list)
+        fb.write_into_file(event_file, user_file, event_user_file)
+        R, label = fb.file_transform(event_file, user_file, event_user_file, 1, K)
+        fb.process_data(R, train_file, test_file, event_file_pro)
+    R, label = fb.file_transform(event_file, user_file, event_user_file, 0, K)
+    return R, label
 
 if __name__ == '__main__':
-    token = "EAACEdEose0cBAICWQhyVRPUF3tb9ZCMZCK72OJ1HdY0CbZAI6D" \
-            "WaA4yxAZAntTVP4XZC7wnsNZC0PmDLZAEBeKwI8WTBVuvHX1vtn" \
-            "ZBhpEaZCIpZBgO77Y0zpGbJEGCsK3sWkSNWSCoOOVa97C1Kj0T0ZBSRWZBybFBUxOeQ6W7GKrxtOwZDZD"
+    token = "EAACEdEose0cBANZB3Yid5tcZCMCvFiAVEM7KadrWWTGHYnvBO3l2zuBZCwa2r" \
+            "s9OO1zAofjVKOw9wKxxmX3BHVCOSG8ehg03uNJ01TCGW9srGzNg3KvshRdMZCQ" \
+            "OZC12iiyBYlUrZBSBgeg6Bc4ZBifFktKpMmS5K5EYxrlqT8j3wZDZD"
     # test_facebook_api(token)
-    test_fb_event(token)
+    R, label = R, label = test_fb_event(token)
