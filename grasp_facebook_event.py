@@ -140,10 +140,14 @@ def test_fb_event(token):
     # fb.grasp_user_event_info(query_list)
     # fb.write_into_file(event_file, user_file, event_user_file)
     R, label = fb.file_transform(event_file, user_file, event_user_file)
+    return R, label
 
 if __name__ == '__main__':
     token = "EAACEdEose0cBAICWQhyVRPUF3tb9ZCMZCK72OJ1HdY0CbZAI6D" \
             "WaA4yxAZAntTVP4XZC7wnsNZC0PmDLZAEBeKwI8WTBVuvHX1vtn" \
             "ZBhpEaZCIpZBgO77Y0zpGbJEGCsK3sWkSNWSCoOOVa97C1Kj0T0ZBSRWZBybFBUxOeQ6W7GKrxtOwZDZD"
     # test_facebook_api(token)
-    test_fb_event(token)
+    R, label = test_fb_event(token)
+    print R
+    print label
+    

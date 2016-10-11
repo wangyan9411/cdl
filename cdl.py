@@ -23,9 +23,9 @@ if __name__ == '__main__':
     p = 4
     is_dummy = False 
     # 34000
-    num_iter = 34000
+    num_iter = 4000
     # 256
-    batch_size = 256 
+    batch_size = 64 
 
     np.random.seed(1234) # set seed
     lv = 1e-2 # lambda_v/lambda_n in CDL

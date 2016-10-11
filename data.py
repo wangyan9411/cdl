@@ -2,7 +2,7 @@ import numpy as np
 from mult import read_mult
 
 def get_mult():
-    X = read_mult('mult.dat',8000).astype(np.float32)
+    X = read_mult('./text',3659).astype(np.float32)
     return X
 
 def get_dummy_mult():
@@ -10,7 +10,7 @@ def get_dummy_mult():
     X[X<0.9] = 0
     return X
 
-def read_user(f_in='cf-train-1-users.dat',num_u=5551,num_v=16980):
+def read_user(f_in='./fb_train.dat',num_u=1057,num_v=281):
     fp = open(f_in)
     R = np.mat(np.zeros((num_u,num_v)))
     for i,line in enumerate(fp):
