@@ -178,7 +178,6 @@ def test_fb_event(token):
         R, label = fb.file_transform(event_file, user_file, event_user_file, 1, K)
         fb.process_data(R, train_file, test_file, event_file_pro)
     R, label = fb.file_transform(event_file, user_file, event_user_file, 0, K)
-    return R, label
 
 if __name__ == '__main__':
     token = "EAACEdEose0cBANZB3Yid5tcZCMCvFiAVEM7KadrWWTGHYnvBO3l2zuBZCwa2r" \

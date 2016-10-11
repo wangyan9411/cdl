@@ -115,9 +115,16 @@ class DataMatrix():
         batch_data = []
         batch_label = []
         batch_label_weight = []
+        dupl = []
         for i in range(0, len(self.data)):
             # for each item, sample subset of 4 to train out the location embedding.
+            # be careful that its size is not always consistent
+            cnt = 0
             for j in range(0, self.sample_num):
+                if len(self.data[i]) - self.num_label - 1 < 1:
+                    continue
+                    
+                # random range?
                 start = random.randint(0, len(self.data[i]) - self.num_label - 1)
                 context = [self.location[i]] + self.data[i][start: start + self.num_label / 2] \
                     + self.data[i][start + 1 + self.num_label / 2: start + self.num_label]
@@ -131,10 +138,12 @@ class DataMatrix():
                 batch_data.append(context)
                 batch_label.append(target)
                 batch_label_weight.append(target_weight)
+                cnt += 1
+            dupl.append(cnt)
 
         # construct label_V-theta1:
         assert len(self.data) == len(V_theta1)
-        batch_label_V = [l for l in V_theta1 for _ in range(0, self.sample_num)]
+        batch_label_V = [l for i, l in enumerate(V_theta1) for _ in range(0, dupl[i])]
         assert len(batch_label_V) == len(batch_data)
 
         matrix = np.array(batch_data)
@@ -238,10 +247,9 @@ class LocationEmbedding(object):
     def get_params(self):
         return self.args['embed_weight'].asnumpy()[self.vocab_size - self.data_size:, :]
 
-
 def getLocationEmbedding(batch_size, item_size):
     num_label = 6
-    datamatrix = DataMatrix("./data/text8", batch_size, num_label)
+    datamatrix = DataMatrix("./raw-text", batch_size, num_label)
     # (TODO: wangyan) the initialization is very important
     V_theta1 = np.random.random([item_size,50])
     print str(V_theta1)
@@ -272,7 +280,6 @@ if __name__ == '__main__':
 
 #print str(args['embed_weight'].asnumpy())
 
-
 # a = model.get_params()
     args = LE.get_params()
     print len(args)
@@ -284,4 +291,3 @@ if __name__ == '__main__':
         print i
         print 0.5+0.5*(float(inA*inB.T)/(la.norm(inA)*la.norm(inB)))
     open('save2', 'w').write(str(args))
-

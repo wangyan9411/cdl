@@ -181,7 +181,7 @@ class Solver(object):
                 lambda_v_rt[:] = lambda_v_rt_old[:] # back to normal lambda_v_rt
 
                 # reset the data iterator for the SDAE.
-                data_iter = mx.io.NDArrayIter({'data': X, 'V': V-theta2, 'lambda_v_rt':
+                data_iter = mx.io.NDArrayIter({'data': X, 'V': V-theta2, 'lambda_v_rt': 
                     lambda_v_rt},
                     batch_size=batch_size, shuffle=False,
                     last_batch_handle='pad')
