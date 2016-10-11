@@ -21,11 +21,11 @@ if __name__ == '__main__':
     lambda_v = 10 # lambda_v in CDL
     K = 50
     p = 4
-    is_dummy = True
+    is_dummy = False 
     # 34000
-    num_iter = 1000
+    num_iter = 34000
     # 256
-    batch_size = 10
+    batch_size = 256 
 
     np.random.seed(1234) # set seed
     lv = 1e-2 # lambda_v/lambda_n in CDL

@@ -1,5 +1,7 @@
+import random
 import numpy as np
 from data import read_user
+
 def cal_precision(p,cut):
     R_true = read_user('cf-test-1-users.dat')
     dir_save = 'cdl'+str(p)
@@ -16,10 +18,8 @@ def cal_precision(p,cut):
         pl = sorted(enumerate(l_score),key=lambda d:d[1],reverse=True)
         l_rec = list(zip(*pl)[0])[:cut]
         s_rec = set(l_rec)
+        s_rec = set(random.randint(0, len(V)) for _ in range(cut))
         s_true = set(np.where(R_true[i,:]>0)[1])
-#        print '----------'
-#        print s_true
-#        print s_rec
         cnt_hit = len(s_rec.intersection(s_true))
         num_hit += cnt_hit
         fp.write('%d:' % cnt_hit)
@@ -28,5 +28,5 @@ def cal_precision(p,cut):
     fp.close()
     print 'Precision: %.3f' % (float(num_hit)/num_u/cut)
 
-cal_precision(4,8)
+cal_precision(4,10)
 
