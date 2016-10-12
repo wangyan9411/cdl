@@ -81,7 +81,15 @@ def load_data(name):
         data.append([vocab[tk] for tk in tks])
         item_size += 1
     #assign faked word id to locations
-    location = range(len(vocab)+1, len(vocab)+1+item_size)
+    # 
+    label = open('label').read()
+    label = eval(label)
+    assert len(label) == len(data)
+    
+    # location = range(len(vocab)+1, len(vocab)+1+item_size)
+    location = [label_id + len(vocab)+1 for label_id in label]
+    print 'location'
+    print location
 
     return data, location, negative, vocab, freq
 
@@ -95,7 +103,8 @@ class DataMatrix():
         # self.negative stores the sampling pool for the NCE
         self.data, self.location, self.negative, self.vocab, self.freq = load_data(name)
         # Some mistake here? !! the word 0 and word_last is never updated
-        self.vocab_size = 1 + len(self.vocab) + len(self.data) # plus the location size
+        self.vocab_size = 1 + len(self.vocab) + len(set(self.location)) # plus the location size
+        print len(self.vocab)
         print 'vocab size'
         print self.vocab_size
         self.num_label = num_label
@@ -196,11 +205,13 @@ class LocationEmbedding(object):
 
 
     def construct(self, xpu, sym,
-            data_iter, vocab_size, data_size, data_matrix, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
+            data_iter, vocab_size, data_size, data_matrix, location, auxs = None, begin_iter = 0, end_iter = 2000, args_lrmult={}, debug = False):
         self.xpu = xpu
         self.vocab_size = vocab_size
         self.data_size = data_size
         self.datamatrix = data_matrix
+        self.l_size = len(set(location)) 
+        self.location = location
         # 50 is consistent with K in Joint learning
         self.args = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
         self.args_grad = {'embed_weight': mx.nd.empty((vocab_size, 50), self.xpu),}
@@ -245,7 +256,9 @@ class LocationEmbedding(object):
         data_iter.reset()
 
     def get_params(self):
-        return self.args['embed_weight'].asnumpy()[self.vocab_size - self.data_size:, :]
+        embeds = self.args['embed_weight'].asnumpy()[self.vocab_size - self.l_size:, :]
+        arg = [embeds[i] for i in self.location]
+        return np.array(arg)
 
 def getLocationEmbedding(batch_size, item_size):
     num_label = 6
@@ -267,13 +280,17 @@ def getLocationEmbedding(batch_size, item_size):
 # solver.set_monitor(Monitor(1000))
 
 #   logging.info('Fine tuning...')
-    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter, vocab_size = datamatrix.vocab_size, data_size = data_size, data_matrix = datamatrix)
+    label = open('label').read()
+    label = eval(label)
+    solver.construct(xpu = mx.cpu(), sym = network, data_iter = data_iter, vocab_size = datamatrix.vocab_size, data_size = data_size, data_matrix = datamatrix, location = label)
     return solver, data_iter
 
 if __name__ == '__main__':
-    LE, data_iter = getLocationEmbedding()
+    batch = 256 
+    itemsize = 281 
+    LE, data_iter = getLocationEmbedding(batch, itemsize)
     #for i in range(begin_iter, end_iter):
-    epoch = 20
+    epoch = 100
     for i in range(0, epoch):
         LE.perform_one_epoch(data_iter)
         data_iter.reset()
@@ -282,9 +299,9 @@ if __name__ == '__main__':
 
 # a = model.get_params()
     args = LE.get_params()
-    print len(args)
+    open('save', 'w').write(str(args))
 
-    A = args[0,:]
+    A = args[0, :]
     for i in range(0, len(args)):
         inA = np.mat(A)
         inB = np.mat(args[i, :])

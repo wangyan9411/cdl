@@ -148,6 +148,5 @@ if __name__ == '__main__':
             "ZBhpEaZCIpZBgO77Y0zpGbJEGCsK3sWkSNWSCoOOVa97C1Kj0T0ZBSRWZBybFBUxOeQ6W7GKrxtOwZDZD"
     # test_facebook_api(token)
     R, label = test_fb_event(token)
-    print R
-    print label
+    open('label', 'w').write(str(list(label)))
     
