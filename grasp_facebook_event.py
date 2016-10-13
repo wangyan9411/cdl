@@ -3,6 +3,7 @@ import fb
 import json
 import random
 import numpy as np
+import requests
 from sklearn.cluster import KMeans
 
 
@@ -25,9 +26,9 @@ class FbEvent:
 
     def get_event_detail(self, event_id):
         """get event detail from a event, which include description, location name, location detail, attending list"""
-        events = self.facebook.get_object(cat="single", id=event_id, fields=['description', 'name', 'venue', 'attending'])
+        events = self.facebook.get_object(cat="single", id=event_id, fields=['description', 'name', 'place', 'attending'])
         return events.get('description', None), events.get('name', None), \
-               events.get('venue', None), events.get('attending', None)
+               events.get('place', None), events.get('attending', None)
 
     def grasp_user_event_info(self, query_list):
         """get facebook events and users from a keyword query list till the scale of the data is large enough ,
@@ -40,7 +41,9 @@ class FbEvent:
                         return
                     desc, loc_name, location, users = self.get_event_detail(event['id'])
                     if event['id'] not in self.all_events.keys() and desc is not None and loc_name is not None\
-                            and location is not None and 'longitude' in location.keys() and users is not None:
+                            and location is not None and 'location' in location.keys() and 'longitude' in location['location'].keys()\
+                            and users is not None:
+                        print "the %d event id is %s" % (len(self.all_events), event['id'])
                         self.all_events[event['id']] = {'description': desc, 'loc_name': loc_name, 'location': location}
                         self.event_user[event['id']] = []
                         for user in users['data']:
@@ -149,7 +152,7 @@ def test_facebook_api(token):
     print object1
     object2 = facebook.get_object(cat="multiple", ids=['me', '1622298331340599'])
     print object2
-    object3 = facebook.get_object(cat="single", id='1137489669671017', fields=['place'])
+    object3 = facebook.get_object(cat="single", id='1755328164699784', fields=['description', 'name', 'place', 'attending'])
     print object3
     object4 = facebook.get_query_object(keyword='USC')
     print object4
@@ -157,11 +160,15 @@ def test_facebook_api(token):
 
 def test_fb_event(token):
     """test FbEvent class"""
-    user_threshold = 1000
-    event_threshold = 1000
-    query_list = ['Beijing', 'Shanghai', 'Washington', 'New York', 'London', 'Cambridge',
-                  'USC', 'Stanford', 'MIT', 'UCB', 'Harvard', 'Princeton'
-                  'Google', 'Microsoft', 'IBM', 'Walmart', 'Disney', 'Coca-Cola'
+    user_threshold = 2000
+    event_threshold = 2000
+    query_list = ['Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen',
+                  'Washington', 'New York', 'Los Angeles', 'San Francisco',
+                  'London', 'Birmingham', 'Edinburgh', 'Cambridge',
+                  'USC', 'UCB', 'UCLA', 'MIT', 'UCI', 'Yale',
+                  'Stanford', 'Harvard', 'Princeton', 'Cornell',
+                  'Google', 'Microsoft', 'IBM', 'oracle',
+                  'Walmart', 'Disney', 'Coca-Cola', 'HP'
                   ]
     K = len(query_list)
     event_file = 'event.json'
@@ -170,7 +177,7 @@ def test_fb_event(token):
     train_file = 'fb_train.dat'
     test_file = 'fb_test.dat'
     event_file_pro = 'fb_event.txt'
-    task_is_grasp = 0
+    task_is_grasp = 1
     fb = FbEvent(token, user_threshold, event_threshold)
     if task_is_grasp == 1:
         fb.grasp_user_event_info(query_list)
@@ -179,9 +186,10 @@ def test_fb_event(token):
         fb.process_data(R, train_file, test_file, event_file_pro)
     R, label = fb.file_transform(event_file, user_file, event_user_file, 0, K)
 
+
 if __name__ == '__main__':
-    token = "EAACEdEose0cBANZB3Yid5tcZCMCvFiAVEM7KadrWWTGHYnvBO3l2zuBZCwa2r" \
-            "s9OO1zAofjVKOw9wKxxmX3BHVCOSG8ehg03uNJ01TCGW9srGzNg3KvshRdMZCQ" \
-            "OZC12iiyBYlUrZBSBgeg6Bc4ZBifFktKpMmS5K5EYxrlqT8j3wZDZD"
+    token = "EAAIXe9DIhXIBAL5ZCiB68Pj0U4rn71tOWa6FZAeCjHxQcxZAGqBZCsCFhgyU" \
+            "cqNDifEEFwE0SauUbk1ucDx7qOcxmeXpyVu6yvjxmtAyPjO683nYW5hpwwkBI" \
+            "ayJVKg5PrUT9QfO5ePLxMZCQlMN4EUZCK2yujR2EZD"
     # test_facebook_api(token)
-    R, label = R, label = test_fb_event(token)
+    R, label = test_fb_event(token)

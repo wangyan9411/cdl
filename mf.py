@@ -1,10 +1,9 @@
 # pylint: skip-file
 import numpy as np
-from data import read_user
+from data import read_user, transform_data, train_lda,train_lda2,  read_ctr_result
 
 
-def cal_precision(cut,R_true, U,V, rec_file):
-    R = U.T*V
+def cal_precision(cut,R_true, R, rec_file):
     num_u = R.shape[0]
     num_hit = 0
     fp = open(rec_file, 'w')
@@ -64,7 +63,7 @@ def mf_train(file, num_v = 281, num_u = 1057):
     Rc = U.T*V
     cut = 10
     rec_file = 'rec.txt'
-    cal_precision(cut,R,U,V, rec_file)
+    cal_precision(cut, R, Rc, rec_file)
     # for i in range(R.shape[0]):
     #     I = np.where(R[i, :] > 0)[1]
     #     num = np.sum(I[0, :], axis=0)[0][0]
@@ -73,15 +72,37 @@ def mf_train(file, num_v = 281, num_u = 1057):
 
 def mf_test(file, V, U, num_v = 281, num_u = 1057):
     R = read_user(file, num_u, num_v)
+    R_c = R
     cut = 10
     rec_file = 'rec.txt'
-    cal_precision(cut,R,U,V, rec_file)
+    if U.shape[0] == V.shape[1] or U.shape[0] == V.shape[0]:
+        R_c = U.T * V
+    else:
+        R_c = U * V.T
+    cal_precision(cut, R, R_c, rec_file)
+
 
 if __name__ == '__main__':
     train_file = 'fb_train.dat'
     test_file = 'fb_test.dat'
     num_v = 426
     num_u = 1956
-    V, U = mf_train(train_file, num_v, num_u)
-    mf_test(test_file, V, U, num_v, num_u)
 
+    # test mf
+    # V, U = mf_train(train_file, num_v, num_u)
+    # mf_test(test_file, V, U, num_v, num_u)
+
+    # transform data from event-user matrix to user_event
+    # transform_data('fb_train.dat', 'fb_train_items.dat', num_u, num_v)
+
+    # train_file = 'text'
+    # theta_file = 'fb_theta.txt'
+    # beta_file = 'fb_beta.txt'
+    # train_lda2(train_file, theta_file, beta_file)
+
+    # test ctr
+    num_t = 100
+    V_file = 'final-V.dat'
+    U_file = 'final-U.dat'
+    V, U = read_ctr_result(V_file, U_file, num_v, num_t, num_u)
+    mf_test(test_file, V, U, num_v, num_u)
