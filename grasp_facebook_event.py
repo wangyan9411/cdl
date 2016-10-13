@@ -193,3 +193,5 @@ if __name__ == '__main__':
             "ayJVKg5PrUT9QfO5ePLxMZCQlMN4EUZCK2yujR2EZD"
     # test_facebook_api(token)
     R, label = test_fb_event(token)
+    # open('label', 'w').write(str(list(label)))
+

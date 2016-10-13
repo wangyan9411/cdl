@@ -28,5 +28,5 @@ def cal_precision(p,cut):
     fp.close()
     print 'Precision: %.3f' % (float(num_hit)/num_u/cut)
 
-cal_precision(4,10)
+cal_precision(4,1)
 
